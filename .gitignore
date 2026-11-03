@@ -110,3 +110,8 @@ fespatap.so
 config/spk.env
 device/spk.conf
 src/spk.env
+
+/data/
+/secrets/
+/models/
+/.cache/

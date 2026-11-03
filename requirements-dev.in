@@ -1,0 +1,4 @@
+-r requirements-voice.in
+ruff>=0.14,<1
+pillow>=11,<13
+static-ffmpeg>=2.13,<3

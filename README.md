@@ -62,6 +62,19 @@
 
 ## 文档导航
 
+根目录 [start.sh](start.sh) 提供固定标签的统一运行镜像构建与发布，不自动启动服务：
+
+```sh
+./start.sh build       # 或 --build：本机架构，加载 neteast-spk-server:latest
+docker login          # 凭据只在终端/Docker 凭据存储中处理
+./start.sh push        # 或 --push：ARM64 + AMD64，发布到 Docker Hub
+./start.sh --build --push
+```
+
+默认推送 `pczhao1210/neteast-spk-server:latest`，不支持自定义 tag；`--namespace` / `DOCKERHUB_NAMESPACE` 可覆盖用户或组织。推送前在 Docker Hub 创建或确认该仓库为 **Private**，脚本不会创建仓库或修改可见性。双架构发布前会检查 builder 是否同时支持 ARM64/AMD64，x64 主机缺少 QEMU binfmt 时直接报错并提示安装方式；组合 build/push 不重复构建本地镜像。统一 `runtime` 包含语音和 Node 依赖，Compose 的所有服务都使用 `SPK_IMAGE`（默认 `neteast-spk-server:latest`）；R76s 可设为 Docker Hub 镜像后 `docker compose pull` 再 `up -d --no-build`。
+
+第三代 R76s 容器候选版本已提供音乐管理 UI、双 LLM 协议、Azure Speech 和受控 MCP 搜索入口。当前通过离线与浏览器验证，尚未完成 R76s/音箱/账号实测；部署与未验收门槛见 [11-R76s 部署与验收](docs/11-R76s-部署与验收.md)。不要用历史 `src/install.sh` 部署这一版本。
+
 | 文档 | 讲什么 |
 |---|---|
 | [01-这台机器是什么](docs/01-这台机器是什么.md) | 芯片、硬件构成、它到底是怎么废的 |
@@ -74,6 +87,9 @@
 | [08-路线更正表](docs/08-路线更正表.md) | ★ 我走过、又证明是错的那些路（省你几个月） |
 | [**09-延迟与能力**](docs/09-延迟与能力.md) | ★ **怎么把它从"能用"调到"好用"**：13 秒压到 6 秒，以及后来长出来的能力 |
 | [PROTOCOL.md](docs/PROTOCOL.md) | 逆向出来的接口速查表 |
+| [10-R76s 执行计划](docs/10-R76s-Docker-执行计划.md) | 改造范围、阶段与原缺陷基线 |
+| [11-R76s 部署与验收](docs/11-R76s-部署与验收.md) | 容器入口、配置、迁移、回滚与验收边界 |
+| [12-手机播放与主题](docs/12-手机播放与主题.md) | 原生播放共存、AirPlay 可行性、扫码/推荐、双架构与 Kindle |
 
 ---
 

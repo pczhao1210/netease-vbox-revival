@@ -222,6 +222,8 @@ def status():
 
 def now_playing():
     """(当前 URI, 已播秒数, 总秒数)。"""
+    if via601():
+        return _last['src'], None, None
     r = _soap('AVTransport', AV, 'GetPositionInfo', '<InstanceID>0</InstanceID>')
     uri = re.search(r'<TrackURI>(.*?)</TrackURI>', r)
     dur = re.search(r'<TrackDuration>([\d:]+)</TrackDuration>', r)

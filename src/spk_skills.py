@@ -1424,11 +1424,11 @@ def dispatch(name, args, dry=False, ctx=None, on_audio=None, channel=None):
 
         if name == 'pause_audio':
             ctl.pause()
-            return '已暂停'
+            return '已提交停止；重新播放会从头开始' if ctl.via601() else '已暂停'
 
         if name == 'resume_audio':
             ctl.resume()
-            return '继续播放'
+            return '已提交从头播放' if ctl.via601() else '继续播放'
 
         if name == 'stop_audio':
             ctl.stop()

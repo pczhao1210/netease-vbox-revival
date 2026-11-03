@@ -23,7 +23,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-NETGUARD = os.path.join(HERE, 'device', 'netguard.sh')
+NETGUARD = os.path.join(os.path.dirname(HERE), 'device', 'netguard.sh')
 
 # 假命令。iwconfig 把 PM 状态存成文件；有 refuse 文件就"死活关不掉"。
 # ip 的 link show 成功与否由 ifdown 文件决定（模拟 wlan0 还没起来的开机早期）。

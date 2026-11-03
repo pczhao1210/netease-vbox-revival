@@ -34,6 +34,7 @@
 
 import os
 import re
+import stat
 import sys
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -57,11 +58,23 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---- 工具 ----------------------------------------------------------
     def _full_path(self):
-        """把请求路径落到 ROOT 里；越界（../）一律 None。"""
+        """把请求路径落到 ROOT 里；越界或经过符号链接一律 None。"""
         p = urllib.parse.unquote(self.path.split('?')[0])
         p = os.path.normpath(p).lstrip('/')
-        full = os.path.abspath(os.path.join(ROOT, p))
-        if full != os.path.abspath(ROOT) and not full.startswith(os.path.abspath(ROOT) + os.sep):
+        root = os.path.abspath(ROOT)
+        full = os.path.abspath(os.path.join(root, p))
+        if full != root and not full.startswith(root + os.sep):
+            return None
+        current = root
+        for part in os.path.relpath(full, root).split(os.sep):
+            if part == '.':
+                continue
+            current = os.path.join(current, part)
+            if os.path.islink(current):
+                return None
+        resolved_root = os.path.realpath(root)
+        resolved = os.path.realpath(full)
+        if resolved != resolved_root and not resolved.startswith(resolved_root + os.sep):
             return None
         return full
 
@@ -90,14 +103,34 @@ class Handler(BaseHTTPRequestHandler):
             return 'unsatisfiable'
         return start, end
 
+    def _open_file(self, full):
+        parts = os.path.relpath(full, os.path.abspath(ROOT)).split(os.sep)
+        directory = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            for part in parts[:-1]:
+                child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=directory)
+                os.close(directory)
+                directory = child
+            descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                 dir_fd=directory)
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                os.close(descriptor)
+                raise OSError('not a regular file')
+            return os.fdopen(descriptor, 'rb')
+        finally:
+            os.close(directory)
+
     def _send(self, code, ctype, size, start, end, extra=None):
         self.send_response(code)
         self.send_header('Content-Type', ctype)
         if code == 206:
             self.send_header('Content-Range', 'bytes %d-%d/%d' % (start, end, size))
-        self.send_header('Content-Length', str(end - start + 1))
+        self.send_header('Content-Length', str(max(0, end - start + 1)))
         self.send_header('Accept-Ranges', 'bytes')
-        self.send_header('Last-Modified', self.date_time_string(os.path.getmtime(self._cur)))
+        self.send_header('Last-Modified', self.date_time_string(self._stat.st_mtime))
+        self.send_header('Connection', 'close')
+        self.close_connection = True
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -111,11 +144,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def _handle(self, head_only):
         full = self._full_path()
-        if not full or not os.path.isfile(full):
+        try:
+            if not full:
+                raise OSError('invalid path')
+            media_file = self._open_file(full)
+        except (OSError, ValueError):
             self.send_error(404, 'Not Found')
             return
+        try:
+            self._serve_file(full, media_file, head_only)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            media_file.close()
+
+    def _serve_file(self, full, media_file, head_only):
         self._cur = full
-        size = os.path.getsize(full)
+        self._stat = os.fstat(media_file.fileno())
+        size = self._stat.st_size
         ctype = CTYPE.get(os.path.splitext(full)[1].lower(), 'application/octet-stream')
         rng = self._range(size)
         if rng == 'unsatisfiable':
@@ -128,23 +174,20 @@ class Handler(BaseHTTPRequestHandler):
             start, end = rng
             code = 206
         else:
-            start, end = 0, max(0, size - 1)
+            start, end = 0, size - 1
             code = 200
         self._send(code, ctype, size, start, end)
         if head_only:
             return
-        try:
-            with open(full, 'rb') as f:
-                f.seek(start)
-                left = end - start + 1
-                while left > 0:
-                    d = f.read(min(CHUNK, left))
-                    if not d:
-                        break
-                    self.wfile.write(d)
-                    left -= len(d)
-        except (BrokenPipeError, ConnectionResetError):
-            pass                                   # 设备提前挂断：正常，别刷栈
+        media_file.seek(start)
+        left = end - start + 1
+        while left > 0:
+            data = media_file.read(min(CHUNK, left))
+            if not data:
+                self.close_connection = True
+                break
+            self.wfile.write(data)
+            left -= len(data)
 
     def log_message(self, fmt, *args):
         # ★ 格式必须与 http.server 一致：`IP - - [时间] "GET /x.mp3 HTTP/1.1" 200 -`

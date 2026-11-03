@@ -45,6 +45,8 @@
   好让设备尽快把 duration 算长。
 """
 import asyncio
+from collections import deque
+import hmac
 import json
 import os
 import shutil
@@ -71,9 +73,46 @@ PAD_MP3 = '/tmp/spk_tts_pad.mp3'
 TTL = float(os.environ.get('SPK_TTS_STREAM_TTL', '300'))     # 流跑完留多久（供重连/查账）
 FIRST_WAIT = float(os.environ.get('SPK_TTS_STREAM_FIRST', '1.5'))   # 等首包的上限
 SRC_SR = int(os.environ.get('SPK_TTS_STREAM_SRC_SR', '24000'))      # qwen 给的 PCM
+TOKENF = os.environ.get('SPK_TTS_STREAM_TOKEN_FILE',
+                        os.path.expanduser('~/.spk_tts_stream_token'))
+MAX_BODY = int(os.environ.get('SPK_TTS_STREAM_MAX_BODY', '16384'))
+MAX_TEXT = int(os.environ.get('SPK_TTS_STREAM_MAX_TEXT', '4000'))
+MAX_INFLIGHT = int(os.environ.get('SPK_TTS_STREAM_MAX_INFLIGHT', '2'))
+RATE_LIMIT = int(os.environ.get('SPK_TTS_STREAM_RATE_LIMIT', '20'))
+RATE_WINDOW = float(os.environ.get('SPK_TTS_STREAM_RATE_WINDOW', '60'))
 
 STREAMS = {}
 _lock = threading.Lock()
+_slots = threading.BoundedSemaphore(MAX_INFLIGHT)
+_rate_lock = threading.Lock()
+_rate_hits = {}
+
+
+def _token():
+    value = os.environ.get('SPK_TTS_STREAM_TOKEN', '').strip()
+    if value:
+        return value
+    try:
+        with open(TOKENF) as f:
+            return f.read().strip()
+    except OSError:
+        return ''
+
+
+def _rate_allowed(client):
+    now = time.monotonic()
+    cutoff = now - RATE_WINDOW
+    with _rate_lock:
+        for address, hits in list(_rate_hits.items()):
+            while hits and hits[0] <= cutoff:
+                hits.popleft()
+            if not hits:
+                _rate_hits.pop(address, None)
+        hits = _rate_hits.setdefault(client, deque())
+        if len(hits) >= RATE_LIMIT:
+            return False
+        hits.append(now)
+        return True
 
 
 def log(fmt, *a):
@@ -290,9 +329,12 @@ def _gen(st):
             % (st.sid, st.voice_secs, len(st.buf),
                'None' if st.first is None else '%.2fs' % st.first,
                st.err or 'ok'))
+        if getattr(st, 'slot_reserved', False):
+            st.slot_reserved = False
+            _slots.release()
 
 
-def start(text, instructions=None):
+def start(text, instructions=None, _limit=False):
     """开一条流，**阻塞到首包到手**（≤FIRST_WAIT 秒）。
 
     回 `(sid, url, first)`；失败回 `(None, None, 原因)` —— 调用方据此**退回整段合成**。
@@ -304,12 +346,25 @@ def start(text, instructions=None):
     """
     if not text or not text.strip():
         return None, None, '空文本'
+    if len(text) > MAX_TEXT:
+        return None, None, '文本过长'
     if not qs.available():
         return None, None, '没配 key'
-    st = Stream(text, q.INSTR_DEFAULT if instructions is None else instructions)
-    with _lock:
-        STREAMS[st.sid] = st
-    threading.Thread(target=_gen, args=(st,), daemon=True).start()
+    if _limit and not _slots.acquire(blocking=False):
+        return None, None, '并发合成已满'
+    try:
+        st = Stream(text, q.INSTR_DEFAULT if instructions is None else instructions)
+        st.slot_reserved = _limit
+        with _lock:
+            STREAMS[st.sid] = st
+        threading.Thread(target=_gen, args=(st,), daemon=True).start()
+    except Exception:
+        with _lock:
+            if 'st' in locals():
+                STREAMS.pop(st.sid, None)
+        if _limit:
+            _slots.release()
+        raise
     if not st.first_evt.wait(FIRST_WAIT):
         with st.cond:
             why = st.err or ('%.1fs 没等到首包' % FIRST_WAIT)
@@ -347,8 +402,12 @@ def start_remote(text, instructions=None, timeout=None):
     **跟 `start()` 的契约逐字一致**，调用方照旧原地退回整段合成。
     """
     body = json.dumps({'text': text, 'instructions': instructions}).encode('utf-8')
+    headers = {'Content-Type': 'application/json'}
+    token = _token()
+    if token:
+        headers['Authorization'] = 'Bearer ' + token
     req = urllib.request.Request('http://%s:%d/new' % (OUR_IP, PORT), data=body,
-                                 headers={'Content-Type': 'application/json'})
+                                 headers=headers)
     try:
         with _OPENER.open(req, timeout=timeout or (FIRST_WAIT + 3.5)) as r:
             j = json.loads(r.read() or b'{}')
@@ -447,14 +506,41 @@ class H(BaseHTTPRequestHandler):
         if self.path.split('?')[0] not in ('/new', '/new/'):
             self.send_error(404)
             return
-        try:
-            n = int(self.headers.get('Content-Length') or 0)
-            body = json.loads(self.rfile.read(n) or b'{}')
-        except Exception as e:                                  # noqa: BLE001
-            self._json(400, {'ok': False, 'err': 'body 看不懂：%s' % e})
+        expected = _token()
+        if not expected:
+            self._json(503, {'ok': False, 'err': '流式 TTS 未配置访问令牌'})
             return
-        sid, url, extra = start(body.get('text') or '',
-                                body.get('instructions'))
+        supplied = self.headers.get('Authorization', '')
+        if not hmac.compare_digest(supplied.encode(), ('Bearer ' + expected).encode()):
+            self._json(403, {'ok': False, 'err': '未授权'})
+            return
+        try:
+            n = int(self.headers.get('Content-Length') or -1)
+            if n < 0:
+                self._json(411, {'ok': False, 'err': '需要 Content-Length'})
+                return
+            if n > MAX_BODY:
+                self._json(413, {'ok': False, 'err': '请求体过大'})
+                return
+            body = json.loads(self.rfile.read(n) or b'{}')
+        except (ValueError, json.JSONDecodeError):
+            self._json(400, {'ok': False, 'err': '请求体必须是有效 JSON'})
+            return
+        text = body.get('text') if isinstance(body, dict) else None
+        instructions = body.get('instructions') if isinstance(body, dict) else None
+        if not isinstance(text, str) or not isinstance(instructions, (str, type(None))):
+            self._json(400, {'ok': False, 'err': 'text/instructions 类型无效'})
+            return
+        if len(text) > MAX_TEXT:
+            self._json(413, {'ok': False, 'err': '文本过长'})
+            return
+        if instructions is not None and len(instructions) > MAX_BODY // 2:
+            self._json(413, {'ok': False, 'err': 'instructions 过长'})
+            return
+        if not _rate_allowed(self.client_address[0]):
+            self._json(429, {'ok': False, 'err': '请求过于频繁'})
+            return
+        sid, url, extra = start(text, instructions, _limit=True)
         if not sid:
             log('POST /new 开流失败：%s', extra)
             self._json(503, {'ok': False, 'err': extra})
@@ -528,6 +614,8 @@ class H(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(b)))
+        self.send_header('Connection', 'close')
+        self.close_connection = True
         self.end_headers()
         self.wfile.write(b)
 

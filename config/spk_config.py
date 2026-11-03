@@ -60,12 +60,12 @@ PORT_MICTAP = _int('SPK_PORT_MICTAP', 9998)  # 麦克风截流的 UDP 落点
 DEVICE_IP = os.environ.get('SPK_DEVICE_IP', '')
 
 # ── 数据目录（记忆、会话、日志都落这儿）─────────────────────
-DATA_DIR = pathlib.Path(os.environ.get('SPK_DATA_DIR', str(ROOT)))
+DATA_DIR = pathlib.Path(os.environ.get('SPK_DATA_DIR') or str(ROOT))
 
 # ── 大模型（"脑子"）────────────────────────────────────────
 # ★ 只写端点，**密钥走环境变量，绝不落文件**。
 LLM_BASE = os.environ.get('DS_BASE', 'https://api.deepseek.com/anthropic')
-LLM_MODEL = os.environ.get('SPK_LLM_MODEL', 'deepseek-chat')
+LLM_MODEL = os.environ.get('DS_MODEL') or os.environ.get('SPK_LLM_MODEL', 'deepseek-v4-flash')
 
 # ── 语音合成（"嗓子"）──────────────────────────────────────
 # 可换任意一家；引擎名见 src/spk_voice.py
@@ -90,7 +90,7 @@ LAN_CIDR = os.environ.get(
 def lan_networks():
     """把 LAN_CIDR 拆成 ipaddress 网络对象列表（给白名单判断用）。
 
-    写不出来的那几段**静默跳过** —— 一个有笔误的网段不该让整个服务起不来。
+    显式空值表示拒绝所有来源；任何非法网段都报错，避免配置部分生效。
     """
     import ipaddress
     out = []
@@ -98,10 +98,7 @@ def lan_networks():
         s = s.strip()
         if not s:
             continue
-        try:
-            out.append(ipaddress.ip_network(s))
-        except ValueError:
-            pass
+        out.append(ipaddress.ip_network(s, strict=False))
     return out
 
 

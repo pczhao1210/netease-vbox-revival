@@ -1,0 +1,149 @@
+name: spkbrain
+
+x-runtime: &runtime
+  image: ${SPK_IMAGE:-neteast-spk-server:latest}
+  build:
+    context: .
+    target: runtime
+  init: true
+  restart: unless-stopped
+  read_only: true
+  user: "1000:1000"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 96
+  cpus: 1.0
+  mem_limit: 384m
+  tmpfs:
+    - /tmp:size=96m,mode=1777
+  logging:
+    driver: json-file
+    options:
+      max-size: "5m"
+      max-file: "3"
+
+services:
+  control:
+    <<: *runtime
+    command: [serve, control]
+    environment:
+      SPK_PUBLIC_URL: ${SPK_PUBLIC_URL:-http://127.0.0.1:8080}
+    ports:
+      - "${SPK_LAN_BIND:-127.0.0.1}:${SPK_UI_PORT:-8080}:8080/tcp"
+      - "${SPK_LAN_BIND:-127.0.0.1}:8898:8080/tcp"
+    volumes:
+      - control-state:/state
+      - control-keys:/keys
+      - media-auth:/keys/media
+      - voice-auth:/keys/voice
+      - resolver-auth:/keys/resolver
+      - mcp-auth:/keys/mcp
+    networks: [core, tools]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  media:
+    <<: *runtime
+    command: [serve, media]
+    mem_limit: 512m
+    pids_limit: 64
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      SPK_CONTROL_URL: http://control:8080
+    ports:
+      - "${SPK_LAN_BIND:-127.0.0.1}:8899:8899/tcp"
+    volumes:
+      - media-cache:/media
+      - media-auth:/keys:ro
+      - ${SPK_MUSIC_PATH:-./data/local}:/music:ro
+    networks: [core]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8899/health',timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  music-resolver:
+    <<: *runtime
+    command: [serve, resolver]
+    mem_limit: 512m
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      HOME: /accounts
+    volumes:
+      - music-account:/accounts
+      - resolver-runtime:/resolver
+      - resolver-auth:/keys:ro
+    networks: [core]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8082/health',timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  voice:
+    <<: *runtime
+    profiles: [voice]
+    command: [serve, voice]
+    cpus: 1.5
+    mem_limit: 768m
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      SPK_CONTROL_URL: http://control:8080
+      SPK_KWS_DIR: /models/kws
+    ports:
+      - "${SPK_LAN_BIND:-127.0.0.1}:9998:9998/udp"
+      - "${SPK_LAN_BIND:-127.0.0.1}:9997:9997/tcp"
+      - "${SPK_LAN_BIND:-127.0.0.1}:9997:9997/udp"
+    volumes:
+      - voice-auth:/keys:ro
+      - ${SPK_MODELS_PATH:-./models}:/models:ro
+    networks: [core]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8084/health',timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+  mcp-worker:
+    <<: *runtime
+    profiles: [search]
+    command: [serve, mcp]
+    mem_limit: 256m
+    depends_on:
+      control:
+        condition: service_healthy
+    volumes:
+      - mcp-auth:/keys:ro
+    networks: [tools]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8083/health',timeout=2).read()"]
+      interval: 20s
+      timeout: 3s
+      retries: 3
+
+networks:
+  core:
+    driver: bridge
+  tools:
+    driver: bridge
+
+volumes:
+  control-state:
+  control-keys:
+  media-cache:
+  media-auth:
+  voice-auth:
+  resolver-auth:
+  mcp-auth:
+  music-account:
+  resolver-runtime:

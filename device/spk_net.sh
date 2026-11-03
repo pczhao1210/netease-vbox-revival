@@ -18,6 +18,9 @@ _d=$(dirname "$0"); [ -f "$_d/spk_conf.sh" ] || _d=${SPK_DIR:-/mnt/UDISK/spk}
 #   后面一行都不执行、也没有像样的报错，症状就是"守护一个都没起来、音箱变哑"。
 [ -f "$_d/spk_conf.sh" ] || { echo "缺 $_d/spk_conf.sh —— 先把它推到设备上" >&2; exit 1; }
 . "$_d/spk_conf.sh"
+if [ "$SPK_NET_PROTOCOL" = v2 ]; then
+	exec /bin/sh "$_d/spk_agent_v2.sh"
+fi
 LOG=/mnt/UDISK/spk/net.log
 TOKF=/mnt/UDISK/spk/net.token
 SRV=${SPK_NET_SRV:-$SPK_SRV:$SPK_PORT_NETD}
@@ -151,7 +154,7 @@ onlink() {
 }
 
 while true; do
-	C=$(curl -s -m 5 "$U/cmd?t=$TOK" 2>/dev/null)
+	C=$(curl -fsS -m 5 "$U/cmd?t=$TOK" 2>/dev/null) || C=
 	if [ -n "$C" ]; then
 		fails=0
 		onlink

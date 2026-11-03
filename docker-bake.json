@@ -1,0 +1,15 @@
+{
+  "variable": {
+    "IMAGE": { "default": "neteast-spk-server:latest" }
+  },
+  "group": { "default": { "targets": ["runtime"] } },
+  "target": {
+    "runtime": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "target": "runtime",
+      "platforms": ["linux/arm64", "linux/amd64"],
+      "tags": ["${IMAGE}"]
+    }
+  }
+}

@@ -29,6 +29,7 @@ SPK_TMP=${SPK_TMP:-/tmp/spk}
 : "${SPK_PORT_MP3:=8899}"
 : "${SPK_PORT_TTS:=8896}"
 : "${SPK_PORT_MICTAP:=9998}"
+: "${SPK_NET_PROTOCOL:=legacy}"
 
 # ── 网关（设备所在网段的网关，黑洞指向之类要用）──────────────
 : "${SPK_GW:=192.168.1.1}"
@@ -44,3 +45,4 @@ SPK_TMP=${SPK_TMP:-/tmp/spk}
 export SPK_DIR SPK_TMP SPK_SRV SPK_GW SPK_DEV_IP
 export SPK_PORT_NETD SPK_PORT_MP3 SPK_PORT_TTS SPK_PORT_MICTAP
 export SPK_NET_SRV SPK_PROV_MACMINI
+export SPK_NET_PROTOCOL

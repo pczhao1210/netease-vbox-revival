@@ -51,6 +51,7 @@
     **mtime 是"谁写都算数"的唯一判据** —— 零额外文件、零调用方改动、防漏。
 """
 import argparse
+import hmac
 import http.server
 import os
 import sys
@@ -126,9 +127,12 @@ class H(http.server.BaseHTTPRequestHandler):
     def _auth(self, q):
         t = token()
         if not t:
-            return True                          # 还没设口令就不拦（首次部署方便）
+            self.send_response(503)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return False
         got = urllib.parse.parse_qs(q).get('t', [''])[0]
-        if got != t:
+        if not hmac.compare_digest(got.encode(), t.encode()):
             self.send_response(403)
             self.send_header('Content-Length', '0')
             self.end_headers()

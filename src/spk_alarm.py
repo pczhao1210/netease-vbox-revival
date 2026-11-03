@@ -18,6 +18,7 @@
 import datetime
 import fcntl
 import json
+import math
 import os
 import random
 import re
@@ -25,6 +26,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -648,6 +650,20 @@ def _fill_lock(path):
         return None
 
 
+def _is_mp3(path):
+    try:
+        probe = subprocess.run(['ffprobe', '-v', 'error', '-show_entries',
+                                'format=duration:stream=codec_name,codec_type', '-of', 'json', path],
+                               capture_output=True, timeout=15, check=True)
+        information = json.loads(probe.stdout)
+        duration = float(information.get('format', {}).get('duration', 0))
+        return (math.isfinite(duration) and duration > 0 and any(
+            stream.get('codec_type') == 'audio' and stream.get('codec_name') == 'mp3'
+            for stream in information.get('streams', [])))
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return False
+
+
 def cache_fill(url, path):
     """★ 主人 2026-09-23：「不要下载，直接流式播放+缓存就行了」——
     所以这是**边播边存**：设备那头正在流式拉，我们顺手落一份，
@@ -662,26 +678,29 @@ def cache_fill(url, path):
       见 `_fill_lock` 的注释（不做的话是"下两遍 + 缓存里躺一个坏文件"）。
     """
     try:
-        if os.path.getsize(path) > 65536:
+        if os.path.getsize(path) > 0 and _is_mp3(path):
             return                              # 已经缓存好了，不必再来一遍
     except OSError:
         pass
     fh = _fill_lock(path)
-    if fh is None:
+    if fh is None or fh is False:
         return                                  # 别人正在下这一首 ⇒ 别抢
     # ★ 临时名带 pid：就算锁没锁上（`.fill` 文件开不了那条路），
     #   两个进程也不会写同一个文件 —— 各写各的，最后 `os.replace` 是原子的，
     #   留下的那一份一定是**完整的**。
-    tmp = '%s.part.%d' % (path, os.getpid())
+    descriptor, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + '.part.', dir=os.path.dirname(path))
+    os.close(descriptor)
     try:
         free = shutil.disk_usage(CACHE_DIR).free
         if free < DISK_FLOOR:
             log('   ⚠ 盘上只剩 %.1f GB，低过红线 %d MB（SPK_ALARM_DISK_FLOOR_MB）'
                 '⇒ 这首不缓存了' % (free / 1073741824.0, DISK_FLOOR // 1048576))
             return
-        p = subprocess.run(['curl', '-sL', '--max-time', '240', '--noproxy', '*',
+        p = subprocess.run(['curl', '-fsSL', '--max-time', '240', '--noproxy', '*',
+                            '--max-filesize', str(CACHE_ONE_MAX),
                             '-o', tmp, url], capture_output=True, timeout=260)
-        if p.returncode == 0 and os.path.getsize(tmp) > 65536:
+        if (p.returncode == 0 and os.path.getsize(tmp) > 0
+            and _is_mp3(tmp)):
             sz = os.path.getsize(tmp)
             if sz > CACHE_ONE_MAX:
                 log('   ⓘ 这首 %.1f MB 超过单首上限 %d MB ⇒ 不放缓存（照样能放）'
@@ -701,6 +720,10 @@ def cache_fill(url, path):
         except OSError:
             pass
     finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
         if fh is not False:
             try:
                 fh.close()                      # 关掉就是解锁

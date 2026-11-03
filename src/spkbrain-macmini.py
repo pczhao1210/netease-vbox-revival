@@ -53,7 +53,8 @@ UP_PORT = 443
 OUT = os.environ.get('SPK_ASR_CAPTURE', '/tmp/spk_asr_capture')
 KEYFILE = os.environ.get('SPK_KEYFILE', '')
 DS_BASE = os.environ.get('DS_BASE', 'https://api.deepseek.com/anthropic')
-DS_MODEL = os.environ.get('DS_MODEL', 'deepseek-v4-flash')
+DS_MODEL = (os.environ.get('DS_MODEL') or os.environ.get('SPK_LLM_MODEL')
+            or 'deepseek-v4-flash')
 # ★ 嗓子的唯一定义处在 spk_voice.py（回答 / 思考词 / 唤醒应答三处必须同一个人）。
 #   原先这里硬编码，spk_filler.py 那边靠一句注释维持一致 —— 那种一致迟早会漂。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

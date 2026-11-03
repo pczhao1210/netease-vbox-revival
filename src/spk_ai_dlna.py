@@ -83,7 +83,8 @@ BASE = os.environ.get("DS_BASE", "https://api.deepseek.com/anthropic")
 # ★★ `{"type":"disabled"}` 才是【关】。`{"type":"enabled","budget_tokens":0}`
 #   不是关 —— 实测反而更慢（4.36/4.93 秒），别用它。
 #   DS_THINK=1 可以随时把思考开回来（要复核质量时用）。
-MODEL = os.environ.get("DS_MODEL", "deepseek-v4-flash")
+MODEL = (os.environ.get("DS_MODEL") or os.environ.get("SPK_LLM_MODEL")
+         or "deepseek-v4-flash")
 THINK = os.environ.get("DS_THINK", "0") == "1"
 
 

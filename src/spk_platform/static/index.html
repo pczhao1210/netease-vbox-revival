@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="{{ theme }}">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f6f5" />
+    <title>SPK / 网易音箱</title>
+    <link rel="stylesheet" href="/fonts/400.css" />
+    <link rel="stylesheet" href="/fonts/600.css" />
+    <link rel="stylesheet" href="/static/app.css" />
+    <script src="/static/lucide.js" defer></script>
+    <script src="/static/music-access.js" defer></script>
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <section id="login-view" class="login-view" hidden>
+      <div class="login-brand">SPK<span>/</span></div>
+      <h1 id="login-title">管理登录</h1>
+      <form id="login-form">
+        <label for="password">管理员密码</label>
+        <label id="bootstrap-label" for="bootstrap" hidden>初始化令牌</label>
+        <input id="bootstrap" type="password" autocomplete="off" hidden />
+        <input
+          id="password"
+          name="password"
+          type="password"
+          minlength="12"
+          maxlength="256"
+          required
+          autocomplete="current-password"
+        />
+        <button class="primary" type="submit" id="login-submit">
+          登录 <i data-lucide="arrow-right"></i>
+        </button>
+        <p class="error" id="login-error" role="alert"></p>
+      </form>
+    </section>
+    <div id="app" class="app" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#music"
+          >SPK<span>/</span><small>网易音箱</small></a
+        >
+        <nav aria-label="主导航">
+          <button data-view="music" class="selected">
+            <i data-lucide="disc-3"></i><span>音乐</span>
+          </button>
+          <button data-view="speech">
+            <i data-lucide="audio-lines"></i><span>Azure 语音</span>
+          </button>
+          <button data-view="llm">
+            <i data-lucide="messages-square"></i><span>语言模型</span>
+          </button>
+          <button data-view="mcp">
+            <i data-lucide="globe-2"></i><span>MCP 与搜索</span>
+          </button>
+          <button data-view="device">
+            <i data-lucide="speaker"></i><span>设备与声音</span>
+          </button>
+          <button data-view="diagnostics">
+            <i data-lucide="activity"></i><span>诊断与备份</span>
+          </button>
+          <button data-view="appearance">
+            <i data-lucide="settings-2"></i><span>配置</span>
+          </button>
+        </nav>
+        <div class="sidebar-bottom">
+          <span class="connection" id="connection">连接中</span
+          ><button
+            class="icon"
+            id="logout"
+            title="退出登录"
+            aria-label="退出登录"
+          >
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>
+      </aside>
+      <main>
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">CONTROL / R76s</p>
+            <h1 id="page-title">音乐</h1>
+          </div>
+          <div class="revision-controls">
+            <span id="revisions"></span
+            ><button id="save-settings" title="保存草稿">
+              <i data-lucide="save"></i><span>保存</span></button
+            ><button id="apply-settings" class="primary">
+              <i data-lucide="check"></i><span>应用</span>
+            </button>
+          </div>
+        </header>
+        <section id="view-music" class="view">
+          <section class="now-playing" aria-label="当前播放">
+            <div class="speaker-art">
+              <img
+                src="/static/speaker.png"
+                alt="音箱"
+                width="144"
+                height="160"
+              /><span>NETEASE / 601</span>
+            </div>
+            <div class="track-detail">
+              <p class="eyebrow" id="playback-source">当前曲目</p>
+              <h2 id="track-title">等待播放</h2>
+              <p id="track-artist" class="muted">暂无曲目</p>
+              <div class="evidence">
+                <span class="state" id="playback-state">空闲</span
+                ><span id="device-evidence">设备状态未知</span>
+              </div>
+              <div class="transport">
+                <button
+                  class="icon"
+                  id="previous"
+                  title="上一首"
+                  aria-label="上一首"
+                >
+                  <i data-lucide="skip-back"></i></button
+                ><button
+                  class="icon main-transport"
+                  id="replay"
+                  title="重新播放"
+                  aria-label="重新播放"
+                >
+                  <i data-lucide="rotate-ccw"></i></button
+                ><button
+                  class="icon stop"
+                  id="stop"
+                  title="停止"
+                  aria-label="停止"
+                >
+                  <i data-lucide="square"></i></button
+                ><button
+                  class="icon"
+                  id="next"
+                  title="下一首"
+                  aria-label="下一首"
+                >
+                  <i data-lucide="skip-forward"></i>
+                </button>
+              </div>
+            </div>
+            <div class="player-number">01<span>音乐 / 队列</span></div>
+          </section>
+          <div class="music-layout">
+            <section class="library">
+              <div class="section-heading">
+                <h2>曲库</h2>
+                <div class="inline">
+                  <label class="icon" title="上传本地音乐"
+                    ><input
+                      id="upload-music"
+                      type="file"
+                      accept="audio/*"
+                      hidden /><i data-lucide="upload"></i></label
+                  ><button
+                    class="icon"
+                    id="refresh-library"
+                    title="刷新曲库"
+                    aria-label="刷新曲库"
+                  >
+                    <i data-lucide="refresh-cw"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="tabs" role="tablist" aria-label="曲库来源">
+                <button class="selected" data-library="search" role="tab">
+                  搜索</button
+                ><button data-library="local" role="tab">本地</button
+                ><button data-library="cache" role="tab">缓存</button
+                ><button data-library="playlist" role="tab">歌单</button>
+                <button
+                  data-library="daily"
+                  role="tab"
+                  disabled
+                  aria-disabled="true"
+                >
+                  每日推荐
+                </button>
+                <button
+                  data-library="liked"
+                  role="tab"
+                  disabled
+                  aria-disabled="true"
+                >
+                  红心
+                </button>
+                <button
+                  data-library="favorites"
+                  role="tab"
+                  disabled
+                  aria-disabled="true"
+                >
+                  收藏歌单
+                </button>
+              </div>
+              <form class="searchbar" id="search-form">
+                <i data-lucide="search"></i
+                ><input
+                  id="search-query"
+                  placeholder="歌曲、歌手"
+                  aria-label="歌曲或歌手"
+                  maxlength="200"
+                /><button
+                  type="submit"
+                  class="icon"
+                  title="搜索"
+                  aria-label="搜索"
+                >
+                  <i data-lucide="arrow-right"></i>
+                </button>
+              </form>
+              <div id="tracks" class="tracks">
+                <div class="empty">尚无曲目</div>
+              </div>
+            </section>
+            <aside class="queue">
+              <div class="section-heading">
+                <h2>播放队列</h2>
+                <span id="queue-count" class="muted">0</span>
+              </div>
+              <div class="queue-modes">
+                <label><input id="shuffle" type="checkbox" />随机</label
+                ><select id="repeat" aria-label="循环模式">
+                  <option value="off">顺序</option>
+                  <option value="one">单曲循环</option>
+                  <option value="all">列表循环</option>
+                </select>
+              </div>
+              <div id="queue" class="queue-list">
+                <div class="empty">队列为空</div>
+              </div>
+            </aside>
+          </div>
+          <section class="account-section">
+            <div class="button-row collection-actions">
+              <button id="play-list">
+                <i data-lucide="list-music"></i>播放列表</button
+              ><button id="enqueue-list">
+                <i data-lucide="list-plus"></i>加入队列</button
+              ><button id="refresh-collections">
+                <i data-lucide="refresh-cw"></i>刷新能力
+              </button>
+            </div>
+            <p id="collection-status" class="muted" role="status"></p>
+            <div class="section-heading">
+              <h2>网易云账号</h2>
+              <span id="account-state" class="state">未检测</span>
+            </div>
+            <div class="button-row">
+              <button id="account-refresh">
+                <i data-lucide="refresh-cw"></i>账号状态</button
+              ><button id="account-login">
+                <i data-lucide="qr-code"></i>扫码登录</button
+              ><button id="account-poll">
+                <i data-lucide="scan-line"></i>检查绑定状态</button
+              ><button id="account-logout">
+                <i data-lucide="log-out"></i>退出账号
+              </button>
+            </div>
+            <details>
+              <summary>应用凭据</summary>
+              <form id="music-credentials" class="form-grid">
+                <label
+                  >App ID<input
+                    name="app_id"
+                    autocomplete="off"
+                    required /></label
+                ><label
+                  >Private Key<textarea
+                    name="private_key"
+                    rows="3"
+                    required
+                    autocomplete="off"
+                  ></textarea></label
+                ><button type="submit">
+                  <i data-lucide="key-round"></i>更新凭据
+                </button>
+              </form>
+            </details>
+            <div id="login-qr" class="login-qr" hidden>
+              <img
+                id="login-qr-image"
+                width="240"
+                height="240"
+                alt="网易云登录二维码"
+              /><a id="login-qr-link" target="_blank" rel="noopener noreferrer"
+                >打开授权链接</a
+              >
+            </div>
+            <p id="account-detail" class="muted" role="status"></p>
+          </section>
+          <section class="alarm-section">
+            <div class="section-heading">
+              <h2>闹钟</h2>
+              <button id="new-alarm">
+                <i data-lucide="alarm-clock-plus"></i>添加
+              </button>
+            </div>
+            <div id="alarms" class="alarm-list"></div>
+          </section>
+        </section>
+        <section id="view-appearance" class="view" hidden>
+          <div id="appearance-fields"></div>
+          <a class="button" href="/display" target="_blank" rel="noopener"
+            ><i data-lucide="monitor"></i>墨水屏显示</a
+          >
+        </section>
+        <section id="view-speech" class="view" hidden>
+          <div id="speech-fields"></div>
+          <section class="probe-section">
+            <h2>语音检测</h2>
+            <div class="button-row">
+              <button data-probe="voices">
+                <i data-lucide="list-music"></i>读取音色</button
+              ><button data-probe="tts">
+                <i data-lucide="audio-lines"></i>合成测试</button
+              ><label class="file-button"
+                ><i data-lucide="file-audio"></i>ASR 样本<input
+                  id="asr-sample"
+                  type="file"
+                  accept="audio/wav"
+                  hidden /></label
+              ><button data-probe="asr">
+                <i data-lucide="mic"></i>识别测试
+              </button>
+            </div>
+            <div id="voices" class="voice-list"></div>
+            <pre id="speech-result" class="result" aria-live="polite"></pre>
+          </section>
+        </section>
+        <section id="view-llm" class="view" hidden>
+          <div id="llm-fields"></div>
+          <section class="probe-section">
+            <h2>能力检测</h2>
+            <div class="button-row">
+              <button data-probe="models">
+                <i data-lucide="list"></i>发现模型</button
+              ><button data-probe="text">
+                <i data-lucide="message-circle"></i>文本测试</button
+              ><button data-probe="tools">
+                <i data-lucide="wrench"></i>工具闭环</button
+              ><button data-probe="stream">
+                <i data-lucide="radio"></i>流式测试
+              </button>
+            </div>
+            <div id="model-list" class="model-list"></div>
+            <div id="capabilities" class="capabilities"></div>
+            <pre id="llm-result" class="result" aria-live="polite"></pre>
+          </section>
+          <section class="probe-section">
+            <h2>对话测试</h2>
+            <form id="ask-form" class="searchbar">
+              <input
+                id="ask-text"
+                maxlength="2000"
+                required
+                placeholder="输入问题"
+                aria-label="对话测试问题"
+              /><button class="icon" title="发送" aria-label="发送">
+                <i data-lucide="send"></i>
+              </button>
+            </form>
+            <label class="checkbox"
+              ><input id="ask-search" type="checkbox" />本次明确联网</label
+            ><label class="checkbox"
+              ><input id="ask-speak" type="checkbox" />音箱播报</label
+            >
+            <div id="answer" class="answer"></div>
+            <div id="sources" class="sources"></div>
+          </section>
+        </section>
+        <section id="view-mcp" class="view" hidden>
+          <div class="section-heading">
+            <h2>联网搜索</h2>
+            <button id="add-mcp"><i data-lucide="plus"></i>添加服务</button>
+          </div>
+          <div id="search-fields"></div>
+          <div id="mcp-servers"></div>
+          <pre id="mcp-result" class="result" aria-live="polite"></pre>
+        </section>
+        <section id="view-device" class="view" hidden>
+          <div id="device-fields"></div>
+          <section class="probe-section">
+            <h2>夜间与缓存</h2>
+            <div id="music-fields"></div>
+            <button id="clear-cache" class="danger">
+              <i data-lucide="trash-2"></i>清理未播放缓存
+            </button>
+          </section>
+        </section>
+        <section id="view-diagnostics" class="view" hidden>
+          <div class="section-heading">
+            <h2>运行状态</h2>
+            <button id="refresh-diagnostics">
+              <i data-lucide="refresh-cw"></i>刷新
+            </button>
+          </div>
+          <div id="diagnostics" class="diagnostic-grid"></div>
+          <section class="probe-section">
+            <h2>备份与恢复</h2>
+            <div class="button-row">
+              <a class="button" href="/api/backup" download
+                ><i data-lucide="download"></i>导出设置</a
+              ><label class="file-button"
+                ><i data-lucide="upload"></i>导入设置<input
+                  id="restore-settings"
+                  type="file"
+                  accept="application/json"
+                  hidden /></label
+              ><input
+                id="rollback-revision"
+                type="number"
+                min="1"
+                placeholder="Revision"
+                aria-label="回滚版本"
+              /><button id="rollback"><i data-lucide="history"></i>回滚</button>
+            </div>
+          </section>
+          <section class="probe-section">
+            <h2>最近事件</h2>
+            <div id="events" class="events"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <dialog id="alarm-dialog">
+      <form id="alarm-form">
+        <h2>添加闹钟</h2>
+        <label>时间<input id="alarm-time" type="time" required /></label
+        ><label>曲目<select id="alarm-track" required></select></label>
+        <div class="button-row">
+          <button type="button" id="cancel-alarm">取消</button
+          ><button type="submit" class="primary">保存</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

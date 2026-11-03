@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="eink">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="refresh" content="{{ refresh }}" />
+    <title>SPK / 正在播放</title>
+    <link rel="stylesheet" href="/static/display.css" />
+  </head>
+  <body>
+    <main class="display layout-{{ layout }}">
+      <header>
+        <strong>SPK / 网易音箱</strong
+        ><a href="/display?layout={{ layout }}">刷新</a>
+      </header>
+      <nav aria-label="显示布局">
+        <a
+          href="/display?layout=auto"
+          aria-current="{{ 'page' if layout == 'auto' else 'false' }}"
+          >自动</a
+        >
+        <a
+          href="/display?layout=portrait"
+          aria-current="{{ 'page' if layout == 'portrait' else 'false' }}"
+          >竖屏</a
+        >
+        <a
+          href="/display?layout=landscape"
+          aria-current="{{ 'page' if layout == 'landscape' else 'false' }}"
+          >横屏</a
+        >
+      </nav>
+      <div class="display-content">
+        <section class="display-now">
+          <p class="label">当前曲目</p>
+          <h1>{{ title }}</h1>
+          <p class="artist">{{ artist }}</p>
+          <p>{{ source }}</p>
+          <p class="status">{{ status }}</p>
+          <p>{{ device }} / 实际出声未知</p>
+        </section>
+        <section class="display-queue">
+          <h2>播放队列</h2>
+          {% for item in queue %}
+          <div class="queue-item">
+            <strong>{{ (item.intent or {}).get('title', '待播放曲目') }}</strong
+            ><span>{{ (item.intent or {}).get('artist', '') }}</span>
+          </div>
+          {% else %}
+          <p>队列为空</p>
+          {% endfor %}
+        </section>
+      </div>
+      <footer>配置 {{ revision }}</footer>
+    </main>
+  </body>
+</html>

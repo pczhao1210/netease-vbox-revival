@@ -16,6 +16,8 @@ WorkingDirectory=/opt/spkbrain
 ExecStart=/opt/spkbrain/.venv/bin/python /opt/spkbrain/spk_tts_stream.py
 Restart=always
 RestartSec=5
+# POST /new 需要服务账号家目录中的 ~/.spk_tts_stream_token（权限 0600）；
+# spk-ear 与本服务须以同一账号运行。令牌缺失时流式创建禁用，调用方回退整段合成。
 # 只监听 LAN —— 跟 [[web-services-lan-only]] 那条规矩一致。
 # ★ key 走同目录 .qwen_key（0600），**不放环境变量**。
 # ★ 改成你这台机在局域网里的地址（示例 192.168.1.100）

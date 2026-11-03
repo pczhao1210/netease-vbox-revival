@@ -14,6 +14,8 @@ WorkingDirectory=/opt/spkbrain
 ExecStart=/usr/bin/python3 /opt/spkbrain/spk_netd.py
 Restart=always
 RestartSec=5
+# 启动前在本机与设备分别配置同一随机令牌：主机 ~/.spk_net_token、设备
+# /mnt/UDISK/spk/net.token；两份文件都设为 0600，不把令牌写进 unit 或仓库。
 # 只监听 LAN —— 跟 [[web-services-lan-only]] 那条规矩一致
 # ★ 改成你这台机在局域网里的地址（示例 192.168.1.100）
 Environment=SPK_NET_BIND=192.168.1.100

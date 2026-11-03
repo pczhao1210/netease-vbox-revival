@@ -81,7 +81,7 @@ def answer(cmd, rid):
         STATE['path'] = url
         STATE['time-pos'] = 0.0
         STATE['eof-reached'] = False
-        log('♪ URL 到手：%s' % url)
+        log('♪ URL 到手（地址不进入日志）')
         try:
             op = out_json()
             os.makedirs(os.path.dirname(op), exist_ok=True)

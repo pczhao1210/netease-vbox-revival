@@ -50,7 +50,8 @@ CFG = {
     'cert':      os.environ.get('SPK_CERT', '/etc/spkbrain/spoof.pem'),
     'keyfile':   os.environ.get('SPK_KEYFILE', '/etc/spkbrain/deepseek.key'),
     'ds_base':   os.environ.get('DS_BASE', 'https://api.deepseek.com/anthropic'),
-    'ds_model':  os.environ.get('DS_MODEL', 'deepseek-v4-flash'),
+    'ds_model':  (os.environ.get('DS_MODEL') or os.environ.get('SPK_LLM_MODEL')
+                  or 'deepseek-v4-flash'),
     'voice':     os.environ.get('SPK_VOICE', 'zh-CN-liaoning-XiaobeiNeural'),
     'edge_tts':  os.environ.get('SPK_EDGE_TTS', 'edge-tts'),
     'rewrite_wait': float(os.environ.get('SPK_REWRITE_WAIT', '8')),  # 改写最多等 LLM 多久
